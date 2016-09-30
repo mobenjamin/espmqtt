@@ -2,7 +2,7 @@
 * @Author: Tuan PM
 * @Date:   2016-09-10 09:33:06
 * @Last Modified by:   Tuan PM
-* @Last Modified time: 2016-09-23 22:02:04
+* @Last Modified time: 2016-09-30 23:22:13
 */
 #include <stdio.h>
 #include "freertos/FreeRTOS.h"
@@ -189,7 +189,7 @@ void deliver_publish(mqtt_client *client, uint8_t *message, int length)
         event_data.data_length = length;
         event_data.data = mqtt_get_publish_data(message, &event_data.data_length);
 
-        if(total_mqtt_len == 0){
+        if (total_mqtt_len == 0) {
             total_mqtt_len = client->mqtt_state.message_length - client->mqtt_state.message_length_read + event_data.data_length;
             mqtt_len = event_data.data_length;
         } else {
@@ -201,7 +201,7 @@ void deliver_publish(mqtt_client *client, uint8_t *message, int length)
         event_data.data_length = mqtt_len;
 
         mqtt_info("Data received: %d/%d bytes ", mqtt_len, total_mqtt_len);
-        if(client->settings->data_cb) {
+        if (client->settings->data_cb) {
             client->settings->data_cb(client, &event_data);
         }
         mqtt_offset += mqtt_len;
@@ -212,89 +212,125 @@ void deliver_publish(mqtt_client *client, uint8_t *message, int length)
     } while (1);
 
 }
-void mqtt_start_receive_schedule(mqtt_client *client)
+
+
+void mqtt_process_read(mqtt_client *client)
 {
     int read_len;
     uint8_t msg_type;
     uint8_t msg_qos;
     uint16_t msg_id;
 
-    while (1) {
-        read_len = read(client->socket, client->mqtt_state.in_buffer, CONFIG_MQTT_BUFFER_SIZE_BYTE);
-        mqtt_info("Read len %d", read_len);
-        if (read_len == 0)
+    read_len = read(client->socket, client->mqtt_state.in_buffer, CONFIG_MQTT_BUFFER_SIZE_BYTE);
+    mqtt_info("Read len %d", read_len);
+    if (read_len == 0)
+        break;
+
+    msg_type = mqtt_get_type(client->mqtt_state.in_buffer);
+    msg_qos = mqtt_get_qos(client->mqtt_state.in_buffer);
+    msg_id = mqtt_get_id(client->mqtt_state.in_buffer, client->mqtt_state.in_buffer_length);
+    // mqtt_info("msg_type %d, msg_id: %d, pending_id: %d", msg_type, msg_id, client->mqtt_state.pending_msg_type);
+    switch (msg_type)
+    {
+        case MQTT_MSG_TYPE_SUBACK:
+            if (client->mqtt_state.pending_msg_type == MQTT_MSG_TYPE_SUBSCRIBE && client->mqtt_state.pending_msg_id == msg_id) {
+                mqtt_info("Subscribe successful");
+                if (client->settings->subscribe_cb) {
+                    client->settings->subscribe_cb(client, NULL);
+                }
+            }
             break;
+        case MQTT_MSG_TYPE_UNSUBACK:
+            if (client->mqtt_state.pending_msg_type == MQTT_MSG_TYPE_UNSUBSCRIBE && client->mqtt_state.pending_msg_id == msg_id)
+                mqtt_info("UnSubscribe successful");
+            break;
+        case MQTT_MSG_TYPE_PUBLISH:
+            if (msg_qos == 1)
+                client->mqtt_state.outbound_message = mqtt_msg_puback(&client->mqtt_state.mqtt_connection, msg_id);
+            else if (msg_qos == 2)
+                client->mqtt_state.outbound_message = mqtt_msg_pubrec(&client->mqtt_state.mqtt_connection, msg_id);
 
-        msg_type = mqtt_get_type(client->mqtt_state.in_buffer);
-        msg_qos = mqtt_get_qos(client->mqtt_state.in_buffer);
-        msg_id = mqtt_get_id(client->mqtt_state.in_buffer, client->mqtt_state.in_buffer_length);
-        // mqtt_info("msg_type %d, msg_id: %d, pending_id: %d", msg_type, msg_id, client->mqtt_state.pending_msg_type);
-        switch (msg_type)
-        {
-            case MQTT_MSG_TYPE_SUBACK:
-                if (client->mqtt_state.pending_msg_type == MQTT_MSG_TYPE_SUBSCRIBE && client->mqtt_state.pending_msg_id == msg_id) {
-                    mqtt_info("Subscribe successful");
-                    if (client->settings->subscribe_cb) {
-                        client->settings->subscribe_cb(client, NULL);
-                    }
-                }
-                break;
-            case MQTT_MSG_TYPE_UNSUBACK:
-                if (client->mqtt_state.pending_msg_type == MQTT_MSG_TYPE_UNSUBSCRIBE && client->mqtt_state.pending_msg_id == msg_id)
-                    mqtt_info("UnSubscribe successful");
-                break;
-            case MQTT_MSG_TYPE_PUBLISH:
-                if (msg_qos == 1)
-                    client->mqtt_state.outbound_message = mqtt_msg_puback(&client->mqtt_state.mqtt_connection, msg_id);
-                else if (msg_qos == 2)
-                    client->mqtt_state.outbound_message = mqtt_msg_pubrec(&client->mqtt_state.mqtt_connection, msg_id);
-
-                if (msg_qos == 1 || msg_qos == 2) {
-                    mqtt_info("Queue response QoS: %d", msg_qos);
-                    mqtt_queue(client);
-                    // if (QUEUE_Puts(&client->msgQueue, client->mqtt_state.outbound_message->data, client->mqtt_state.outbound_message->length) == -1) {
-                    //     mqtt_info("MQTT: Queue full");
-                    // }
-                }
-                client->mqtt_state.message_length_read = read_len;
-                client->mqtt_state.message_length = mqtt_get_total_length(client->mqtt_state.in_buffer, client->mqtt_state.message_length_read);
-                mqtt_info("deliver_publish");
-
-                deliver_publish(client, client->mqtt_state.in_buffer, client->mqtt_state.message_length_read);
-                // deliver_publish(client, client->mqtt_state.in_buffer, client->mqtt_state.message_length_read);
-                break;
-            case MQTT_MSG_TYPE_PUBACK:
-                if (client->mqtt_state.pending_msg_type == MQTT_MSG_TYPE_PUBLISH && client->mqtt_state.pending_msg_id == msg_id) {
-                    mqtt_info("received MQTT_MSG_TYPE_PUBACK, finish QoS1 publish");
-                }
-
-                break;
-            case MQTT_MSG_TYPE_PUBREC:
-                client->mqtt_state.outbound_message = mqtt_msg_pubrel(&client->mqtt_state.mqtt_connection, msg_id);
+            if (msg_qos == 1 || msg_qos == 2) {
+                mqtt_info("Queue response QoS: %d", msg_qos);
                 mqtt_queue(client);
-                break;
-            case MQTT_MSG_TYPE_PUBREL:
-                client->mqtt_state.outbound_message = mqtt_msg_pubcomp(&client->mqtt_state.mqtt_connection, msg_id);
-                mqtt_queue(client);
+                // if (QUEUE_Puts(&client->msgQueue, client->mqtt_state.outbound_message->data, client->mqtt_state.outbound_message->length) == -1) {
+                //     mqtt_info("MQTT: Queue full");
+                // }
+            }
+            client->mqtt_state.message_length_read = read_len;
+            client->mqtt_state.message_length = mqtt_get_total_length(client->mqtt_state.in_buffer, client->mqtt_state.message_length_read);
+            mqtt_info("deliver_publish");
 
-                break;
-            case MQTT_MSG_TYPE_PUBCOMP:
-                if (client->mqtt_state.pending_msg_type == MQTT_MSG_TYPE_PUBLISH && client->mqtt_state.pending_msg_id == msg_id) {
-                    mqtt_info("Receive MQTT_MSG_TYPE_PUBCOMP, finish QoS2 publish");
-                }
-                break;
-            case MQTT_MSG_TYPE_PINGREQ:
-                client->mqtt_state.outbound_message = mqtt_msg_pingresp(&client->mqtt_state.mqtt_connection);
-                mqtt_queue(client);
-                break;
-            case MQTT_MSG_TYPE_PINGRESP:
-                mqtt_info("MQTT_MSG_TYPE_PINGRESP");
-                // Ignore
-                break;
+            deliver_publish(client, client->mqtt_state.in_buffer, client->mqtt_state.message_length_read);
+            // deliver_publish(client, client->mqtt_state.in_buffer, client->mqtt_state.message_length_read);
+            break;
+        case MQTT_MSG_TYPE_PUBACK:
+            if (client->mqtt_state.pending_msg_type == MQTT_MSG_TYPE_PUBLISH && client->mqtt_state.pending_msg_id == msg_id) {
+                mqtt_info("received MQTT_MSG_TYPE_PUBACK, finish QoS1 publish");
+            }
+
+            break;
+        case MQTT_MSG_TYPE_PUBREC:
+            client->mqtt_state.outbound_message = mqtt_msg_pubrel(&client->mqtt_state.mqtt_connection, msg_id);
+            mqtt_queue(client);
+            break;
+        case MQTT_MSG_TYPE_PUBREL:
+            client->mqtt_state.outbound_message = mqtt_msg_pubcomp(&client->mqtt_state.mqtt_connection, msg_id);
+            mqtt_queue(client);
+
+            break;
+        case MQTT_MSG_TYPE_PUBCOMP:
+            if (client->mqtt_state.pending_msg_type == MQTT_MSG_TYPE_PUBLISH && client->mqtt_state.pending_msg_id == msg_id) {
+                mqtt_info("Receive MQTT_MSG_TYPE_PUBCOMP, finish QoS2 publish");
+            }
+            break;
+        case MQTT_MSG_TYPE_PINGREQ:
+            client->mqtt_state.outbound_message = mqtt_msg_pingresp(&client->mqtt_state.mqtt_connection);
+            mqtt_queue(client);
+            break;
+        case MQTT_MSG_TYPE_PINGRESP:
+            mqtt_info("MQTT_MSG_TYPE_PINGRESP");
+            // Ignore
+            break;
+    }
+}
+
+void mqtt_process_write()
+{
+
+}
+void mqtt_run_schedule(mqtt_client *client)
+{
+    struct timeval timeout;
+    FD_ZERO (&client->readset);
+    FD_ZERO (&client->write);
+    FD_ZERO (&client->errorset);
+    FD_SET (client->socket, &client->readset);
+    FD_SET (client->socket, &client->writeset);
+    FD_SET (client->socket, &client->errorset);
+
+    timeout.tv_sec = 1;
+    timeout.tv_usec = 0;
+    while (1) {
+
+        if (select(FD_SETSIZE, &client->readset, &client->writeset, &client->errorset, &timeout) < 0) {
+            mqtt_error("select error");
+            break;
         }
+
+        if (FD_ISSET(i, &client->readset)) {
+            mqtt_process_read(client);
+        } else if (FD_ISSET(i, &client->writeset)) {
+            mqtt_process_write(client);
+        } else if (FD_ISSET(i, &client->errorset)) {
+            //process error
+        }
+
+
     }
     mqtt_info("network disconnected");
 }
+
 
 void mqtt_destroy(mqtt_client *client)
 {
@@ -315,14 +351,15 @@ void mqtt_task(void *pvParameters)
             continue;
             //return;
         }
-        mqtt_info("Connected to MQTT broker, create sending thread before call connected callback");
-        xTaskCreate(&mqtt_sending_task, "mqtt_sending_task", 2048, client, CONFIG_MQTT_PRIORITY + 1, &xMqttSendingTask);
-        if (client->settings->connected_cb) {
-            client->settings->connected_cb(client, NULL);
-        }
+
+        // mqtt_info("Connected to MQTT broker, create sending thread before call connected callback");
+        // xTaskCreate(&mqtt_sending_task, "mqtt_sending_task", 2048, client, CONFIG_MQTT_PRIORITY + 1, &xMqttSendingTask);
+        // if (client->settings->connected_cb) {
+        //     client->settings->connected_cb(client, NULL);
+        // }
 
         mqtt_info("mqtt_start_receive_schedule");
-        mqtt_start_receive_schedule(client);
+        mqtt_run_schedule(client);
 
         close(client->socket);
         vTaskDelete(xMqttSendingTask);

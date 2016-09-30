@@ -33,41 +33,44 @@ typedef struct {
 
 typedef struct mqtt_event_data_t
 {
-  uint8_t type;
-  const char* topic;
-  const char* data;
-  uint16_t topic_length;
-  uint16_t data_length;
-  uint16_t data_offset;
-  uint16_t data_total_length;
+    uint8_t type;
+    const char* topic;
+    const char* data;
+    uint16_t topic_length;
+    uint16_t data_length;
+    uint16_t data_offset;
+    uint16_t data_total_length;
 } mqtt_event_data_t;
 
 typedef struct mqtt_state_t
 {
-  uint16_t port;
-  int auto_reconnect;
-  mqtt_connect_info_t* connect_info;
-  uint8_t* in_buffer;
-  uint8_t* out_buffer;
-  int in_buffer_length;
-  int out_buffer_length;
-  uint16_t message_length;
-  uint16_t message_length_read;
-  mqtt_message_t* outbound_message;
-  mqtt_connection_t mqtt_connection;
-  uint16_t pending_msg_id;
-  int pending_msg_type;
-  int pending_publish_qos;
+    uint16_t port;
+    int auto_reconnect;
+    mqtt_connect_info_t* connect_info;
+    uint8_t* in_buffer;
+    uint8_t* out_buffer;
+    int in_buffer_length;
+    int out_buffer_length;
+    uint16_t message_length;
+    uint16_t message_length_read;
+    mqtt_message_t* outbound_message;
+    mqtt_connection_t mqtt_connection;
+    uint16_t pending_msg_id;
+    int pending_msg_type;
+    int pending_publish_qos;
 } mqtt_state_t;
 
 typedef struct  {
-  int socket;
-  mqtt_settings *settings;
-  mqtt_state_t  mqtt_state;
-  mqtt_connect_info_t connect_info;
-  QueueHandle_t xSendingQueue;
-  RINGBUF send_rb;
-  uint32_t keepalive_tick;
+    int socket;
+    mqtt_settings *settings;
+    mqtt_state_t  mqtt_state;
+    mqtt_connect_info_t connect_info;
+    QueueHandle_t xSendingQueue;
+    RINGBUF send_rb;
+    uint32_t keepalive_tick;
+    fd_set writeset;
+    fd_set readset;
+    fd_set errorset;
 } mqtt_client;
 
 mqtt_client *mqtt_start(mqtt_settings *mqtt_info);
