@@ -4,7 +4,8 @@
 #include <string.h>
 #include "mqtt_config.h"
 #include "mqtt_msg.h"
-#include "ringbuf.h"
+#include "outbox.h"
+
 
 
 typedef void (* mqtt_callback)(void *, void *);
@@ -65,8 +66,7 @@ typedef struct  {
     mqtt_settings *settings;
     mqtt_state_t  mqtt_state;
     mqtt_connect_info_t connect_info;
-    QueueHandle_t xSendingQueue;
-    RINGBUF send_rb;
+    mqtt_outbox *outbox;
     uint32_t keepalive_tick;
     fd_set writeset;
     fd_set readset;
