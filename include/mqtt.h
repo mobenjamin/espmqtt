@@ -2,6 +2,7 @@
 #define _MQTT_H_
 #include <stdint.h>
 #include <string.h>
+#include <openssl/ssl.h>
 #include "mqtt_config.h"
 #include "mqtt_msg.h"
 #include "ringbuf.h"

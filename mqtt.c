@@ -14,7 +14,7 @@
 #include "lwip/dns.h"
 #include "lwip/netdb.h"
 #if defined(CONFIG_MQTT_SECURITY_ON)
-#include "openssl/ssl.h"
+#include <openssl/ssl.h>
 #endif
 #include "ringbuf.h"
 #include "mqtt.h"
@@ -222,7 +222,7 @@ int mqtt_write(mqtt_client *client, const void *buffer, int len, int timeout_ms)
     }
 
 #if defined(CONFIG_MQTT_SECURITY_ON)
-    result = SSL_write(client->ssl, buffer, len)
+    result = SSL_write(client->ssl, buffer, len);
 #else
     result = write(client->socket, buffer, len);
 #endif
@@ -616,4 +616,3 @@ void mqtt_stop()
 {
 
 }
-
