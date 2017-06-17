@@ -2,7 +2,13 @@
 #define _MQTT_H_
 #include <stdint.h>
 #include <string.h>
+
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include <freertos/semphr.h>
+#include <freertos/queue.h>
 #include <openssl/ssl.h>
+
 #include "mqtt_config.h"
 #include "mqtt_msg.h"
 #include "ringbuf.h"

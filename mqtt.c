@@ -1,21 +1,17 @@
-/*
-* @Author: Tuan PM
-* @Date:   2016-09-10 09:33:06
-* @Last Modified by:   Tuan PM
-* @Last Modified time: 2017-02-15 13:11:53
-*/
 #include <stdio.h>
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "freertos/semphr.h"
-#include "freertos/queue.h"
 
-#include "lwip/sockets.h"
-#include "lwip/dns.h"
-#include "lwip/netdb.h"
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include <freertos/semphr.h>
+#include <freertos/queue.h>
+#include <lwip/sockets.h>
+#include <lwip/dns.h>
+#include <lwip/netdb.h>
+
 #if defined(CONFIG_MQTT_SECURITY_ON)
 #include <openssl/ssl.h>
 #endif
+
 #include "ringbuf.h"
 #include "mqtt.h"
 
